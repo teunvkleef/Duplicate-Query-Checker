@@ -1,0 +1,82 @@
+// --------------------------------------- Configuration:
+const REQUIRED_KEYWORDS = ["noppenschuim", "piramideschuim", "pyramideschuim"]; // phrase match termen die in de zoekterm moeten zitten, anders wordt het uitgesloten
+const CAMPAIGN_LABEL = "noppenschuim_search"; // Lable voor de specifieke Campagne
+const ADGROUP_LABEL = "ADG_Noppenschuim"; // Label voor de specifieke adgroup
+// --------------------------------------- End of the configuration
+
+function main() {
+    ensureLabelExists(CAMPAIGN_LABEL);
+    ensureLabelExists(ADGROUP_LABEL);
+    const adGroupIds = getEnabledSearchAdGroupIds();
+    const queriesToAddAsNegative = findNegativeKeywordCandidates(adGroupIds);
+
+    if (queriesToAddAsNegative.length > 0) {
+        Logger.log(`Adding ${queriesToAddAsNegative.length} new negative keywords...`);
+        addNegativeKeywordsToAdGroup(queriesToAddAsNegative);
+    } else {
+        Logger.log("No negative keyword additions required.");
+    }
+}
+
+function getEnabledSearchAdGroupIds() {
+    const adGroupIds = [];
+    const adGroupSelector = AdsApp.adGroups()
+        .withCondition(`LabelNames CONTAINS_ANY ['${ADGROUP_LABEL}']`)
+        .withCondition("Status = ENABLED");
+
+    const adGroups = adGroupSelector.get();
+    while (adGroups.hasNext()) {
+        const adGroup = adGroups.next();
+        adGroupIds.push(adGroup.getId());
+    }
+
+    return adGroupIds;
+}
+
+function findNegativeKeywordCandidates(adGroupIds) {
+    const negativeCandidates = [];
+    const queryReport = AdsApp.report(
+        'SELECT Query, AdGroupId FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
+        'WHERE AdGroupId IN [' + adGroupIds.join(",") + '] ' +
+        'DURING YESTERDAY');
+
+    const rows = queryReport.rows();
+    while (rows.hasNext()) {
+        const row = rows.next();
+        const query = row['Query'];
+        const adGroupId = row['AdGroupId'];
+        if (isNegativeKeywordCandidate(query)) {
+            negativeCandidates.push({query, adGroupId});
+        }
+    }
+
+    return negativeCandidates;
+}
+
+function isNegativeKeywordCandidate(query) {
+    return !REQUIRED_KEYWORDS.some(requiredWord => query.toLowerCase().includes(requiredWord));
+}
+
+function addNegativeKeywordsToAdGroup(negativeQueries) {
+    const adGroupIterator = AdsApp.adGroups()
+        .withCondition(`LabelNames CONTAINS_ANY ['${ADGROUP_LABEL}']`)
+        .get();
+
+    while (adGroupIterator.hasNext()) {
+        const adGroup = adGroupIterator.next();
+        const adGroupId = adGroup.getId();
+        negativeQueries.forEach(({query, adGroupId: queryAdGroupId}) => {
+            if (adGroupId == queryAdGroupId) {
+                adGroup.createNegativeKeyword(`[${query}]`);
+                Logger.log(`${query} --> added as an exact negative keyword to ad group ${adGroup.getName()}`);
+            }
+        });
+    }
+}
+
+function ensureLabelExists(labelName) {
+    const labelIterator = AdsApp.labels().withCondition(`Name = '${labelName}'`).get();
+    if (!labelIterator.totalNumEntities()) {
+        AdsApp.createLabel(labelName);
+    }
+}
