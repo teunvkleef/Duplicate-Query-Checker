@@ -1,7 +1,7 @@
 // --------------------------------------- Configuration:
-const REQUIRED_KEYWORDS = ["noppenschuim", "piramideschuim", "pyramideschuim"]; // phrase match termen die in de zoekterm moeten zitten, anders wordt het uitgesloten
-const CAMPAIGN_LABEL = "noppenschuim_search"; // Lable voor de specifieke Campagne
-const ADGROUP_LABEL = "ADG_Noppenschuim"; // Label voor de specifieke adgroup
+const REQUIRED_KEYWORDS = ["test", "test1"]; // phrase match termen die in de zoekterm moeten zitten, anders wordt het uitgesloten
+const CAMPAIGN_LABEL = "label"; // Lable voor de specifieke Campagne
+const ADGROUP_LABEL = "label"; // Label voor de specifieke adgroup
 // --------------------------------------- End of the configuration
 
 function main() {
