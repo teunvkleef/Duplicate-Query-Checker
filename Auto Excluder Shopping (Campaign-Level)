@@ -1,6 +1,6 @@
 // --------------------------------------- Configuration:
-const REQUIRED_KEYWORDS = ["noppenschuim", "piramideschuim", "pyramideschuim"];
-const CAMPAIGN_LABEL = "Noppenschuim";
+const REQUIRED_KEYWORDS = ["test1", "test2"]; // Phrase woorden die de zoekterm moeten bevatten anders worden ze uitgesloten
+const CAMPAIGN_LABEL = "label"; // Label voor de specifieke campagne
 // --------------------------------------- End of the configuration
 
 function main() {
