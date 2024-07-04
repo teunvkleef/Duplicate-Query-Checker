@@ -1,0 +1,80 @@
+// --------------------------------------- Configuration:
+const REQUIRED_KEYWORDS = ["test", "test1"]; // phrase match termen die in de zoekterm moeten zitten, anders wordt het uitgesloten
+const CAMPAIGN_LABEL = "label"; // Label voor de specifieke Campagne
+// --------------------------------------- End of the configuration
+
+function main() {
+    ensureLabelExists(CAMPAIGN_LABEL);
+    const campaignIds = getEnabledSearchCampaignIds();
+    const queriesToAddAsNegative = findNegativeKeywordCandidates(campaignIds);
+
+    if (queriesToAddAsNegative.length > 0) {
+        Logger.log(`Adding ${queriesToAddAsNegative.length} new negative keywords...`);
+        addNegativeKeywordsToCampaign(queriesToAddAsNegative);
+    } else {
+        Logger.log("No negative keyword additions required.");
+    }
+}
+
+function getEnabledSearchCampaignIds() {
+    const campaignIds = [];
+    const campaignSelector = AdsApp.campaigns()
+        .withCondition(`LabelNames CONTAINS_ANY ['${CAMPAIGN_LABEL}']`)
+        .withCondition("Status = ENABLED");
+
+    const campaigns = campaignSelector.get();
+    while (campaigns.hasNext()) {
+        const campaign = campaigns.next();
+        campaignIds.push(campaign.getId());
+    }
+
+    return campaignIds;
+}
+
+function findNegativeKeywordCandidates(campaignIds) {
+    const negativeCandidates = [];
+    const queryReport = AdsApp.report(
+        'SELECT Query, CampaignId FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
+        'WHERE CampaignId IN [' + campaignIds.join(",") + '] ' +
+        'DURING YESTERDAY');
+
+    const rows = queryReport.rows();
+    while (rows.hasNext()) {
+        const row = rows.next();
+        const query = row['Query'];
+        const campaignId = row['CampaignId'];
+        if (isNegativeKeywordCandidate(query)) {
+            negativeCandidates.push({query, campaignId});
+        }
+    }
+
+    return negativeCandidates;
+}
+
+function isNegativeKeywordCandidate(query) {
+    return !REQUIRED_KEYWORDS.some(requiredWord => query.toLowerCase().includes(requiredWord));
+}
+
+function addNegativeKeywordsToCampaign(negativeQueries) {
+    const campaignIterator = AdsApp.campaigns()
+        .withCondition(`LabelNames CONTAINS_ANY ['${CAMPAIGN_LABEL}']`)
+        .get();
+
+    while (campaignIterator.hasNext()) {
+        const campaign = campaignIterator.next();
+        const campaignId = campaign.getId();
+        negativeQueries.forEach(({query, campaignId: queryCampaignId}) => {
+            if (campaignId == queryCampaignId) {
+                campaign.createNegativeKeyword(`[${query}]`);
+                Logger.log(`${query} --> added as an exact negative keyword to campaign ${campaign.getName()}`);
+            }
+        });
+    }
+}
+
+function ensureLabelExists(labelName) {
+    const labelIterator = AdsApp.labels().withCondition(`Name = '${labelName}'`).get();
+    if (!labelIterator.totalNumEntities()) {
+        AdsApp.createLabel(labelName);
+    }
+}
