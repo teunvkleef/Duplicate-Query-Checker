@@ -1,0 +1,91 @@
+// --------------------------------------- Configuration:
+const LABEL_KEYWORDS = {
+    'Label1': ["test1", "test2"], // Specifieke keywords voor adgroups met Label1
+    'Label2': ["example1", "example2"], // Specifieke keywords voor adgroups met Label2
+    // Voeg hier meer labels toe met hun respectievelijke keywords
+};
+const CAMPAIGN_LABEL = "campaignLabel"; // Label voor de specifieke Campagne
+// --------------------------------------- End of the configuration
+
+function main() {
+    ensureLabelExists(CAMPAIGN_LABEL);
+    for (const label in LABEL_KEYWORDS) {
+        ensureLabelExists(label);
+    }
+    const adGroups = getEnabledShoppingAdGroups();
+    adGroups.forEach(adGroup => {
+        const adGroupLabels = getAdGroupLabels(adGroup);
+        adGroupLabels.forEach(label => {
+            if (LABEL_KEYWORDS.hasOwnProperty(label)) {
+                const queriesToAddAsNegative = findNegativeKeywordCandidates(adGroup.getId(), LABEL_KEYWORDS[label]);
+                if (queriesToAddAsNegative.length > 0) {
+                    Logger.log(`Adding ${queriesToAddAsNegative.length} new negative keywords to ad group ${adGroup.getName()} with label ${label}...`);
+                    addNegativeKeywordsToAdGroup(adGroup, queriesToAddAsNegative);
+                } else {
+                    Logger.log(`No negative keyword additions required for ad group ${adGroup.getName()} with label ${label}.`);
+                }
+            }
+        });
+    });
+}
+
+function getEnabledShoppingAdGroups() {
+    const adGroups = [];
+    const adGroupSelector = AdsApp.shoppingAdGroups()
+        .withCondition(`LabelNames CONTAINS_ANY ['${Object.keys(LABEL_KEYWORDS).join("', '")}']`)
+        .withCondition("Status = ENABLED");
+
+    const adGroupIterator = adGroupSelector.get();
+    while (adGroupIterator.hasNext()) {
+        const adGroup = adGroupIterator.next();
+        adGroups.push(adGroup);
+    }
+
+    return adGroups;
+}
+
+function getAdGroupLabels(adGroup) {
+    const labels = [];
+    const labelIterator = adGroup.labels().get();
+    while (labelIterator.hasNext()) {
+        labels.push(labelIterator.next().getName());
+    }
+    return labels;
+}
+
+function findNegativeKeywordCandidates(adGroupId, requiredKeywords) {
+    const negativeCandidates = [];
+    const queryReport = AdsApp.report(
+        'SELECT Query, AdGroupId FROM SEARCH_QUERY_PERFORMANCE_REPORT ' +
+        'WHERE AdGroupId = ' + adGroupId + ' ' +
+        'DURING YESTERDAY');
+
+    const rows = queryReport.rows();
+    while (rows.hasNext()) {
+        const row = rows.next();
+        const query = row['Query'];
+        if (!isNegativeKeywordCandidate(query, requiredKeywords)) {
+            negativeCandidates.push(query);
+        }
+    }
+
+    return negativeCandidates;
+}
+
+function isNegativeKeywordCandidate(query, requiredKeywords) {
+    return !requiredKeywords.some(requiredWord => query.toLowerCase().includes(requiredWord));
+}
+
+function addNegativeKeywordsToAdGroup(adGroup, negativeQueries) {
+    negativeQueries.forEach(query => {
+        adGroup.createNegativeKeyword(`[${query}]`);
+        Logger.log(`${query} --> added as an exact negative keyword to ad group ${adGroup.getName()}`);
+    });
+}
+
+function ensureLabelExists(labelName) {
+    const labelIterator = AdsApp.labels().withCondition(`Name = '${labelName}'`).get();
+    if (!labelIterator.totalNumEntities()) {
+        AdsApp.createLabel(labelName);
+    }
+}
